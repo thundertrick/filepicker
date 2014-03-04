@@ -21,87 +21,154 @@ Utility is also runnable as standalone for testing and demonstration purposes:
 # pylint: disable=C0103,R0904,W0102
 
 import sys
-from PySide import QtGui
+from os import path
+from PySide import QtGui, QtCore
 
+def nameFilters():
+    """
+    Returns a list of valid file names for the picker.
+    """
 
-class ImagepickerSelector(QtGui.QWidget):
+    return ['*.bmp', '*.jpg', '*.jpeg', '*.png']
+
+class ImagePicker(QtGui.QWidget):
     """
-    Imagepicker widget for picking image objects.
+    Widget for picking image files from a directory.
     """
+
+    # Emits the fully qualified path to the picked image
+    imagePicked = QtCore.Signal(str)
 
     def __init__(self, parent=None):
-        super(ImagepickerSelector, self).__init__(parent)
-        self.addBitmaps(None)
+        super(ImagePicker, self).__init__(parent)
 
-    def setBitmaps(self, bitmaps=[]):
-        pass
+        self.listModel = QtGui.QFileSystemModel()
+        self.listModel.setNameFilters(nameFilters())
+    
+        self.listView = QtGui.QListView()
+        self.listView.setUniformItemSizes(True)
+        self.listView.setViewMode(QtGui.QListView.ViewMode.IconMode)
+        self.listView.setResizeMode(QtGui.QListView.ResizeMode.Adjust)
+        self.listView.setModel(self.listModel)
 
-    def addBitmaps(self, bitmaps):
-        for i in range(0, 5):
-            label = QtGui.QLabel()
-            path = '/home/aleksi/downloads/images.jpg'
-            label.setPixmap(QtGui.QPixmap(path))
+        # Transforming slot-signal combo for emitting file names as strings
+        self.listView.activated.connect(self.bitmapSelected)
 
-            self.setLayout(QtGui.QHBoxLayout())
-            self.layout().addWidget(label)
+        self.setLayout(QtGui.QHBoxLayout())
+        self.layout().addWidget(self.listView)
 
-class ImagepickerFolderMenu(QtGui.QWidget):
+    @QtCore.Slot(str)
+    def setBitmapFolder(self, folder):
+        """
+        Sets view path to given folder.
+        """
+
+        self.listModel.setRootPath(folder)
+        self.listView.setRootIndex(self.listModel.index(folder))
+
+    @QtCore.Slot(QtCore.QModelIndex)
+    def bitmapSelected(self, modelIndex):
+        """
+        Intermittently transforms folder name signal emits from 
+        QFileSystemModel QModelIndex emits to unicode strings emits.
+
+        Returned file name is a fully qualified file name for the platform.
+        """
+
+        fullName = path.abspath(path.join(
+                self.listModel.rootPath(), 
+                self.listModel.fileName(modelIndex)))
+
+        # This could be fairly slow
+        for f in nameFilters():
+            if fullName.lower().endswith(f.lower().strip('*')):
+                self.imagePicked.emit(fullName)
+
+class FolderPicker(QtGui.QWidget):
     """
     A selector for picking folder to use for images.
     """
 
+    # Emits fully qualified path to the picked folder
+    folderPicked = QtCore.Signal(str)
+
     def __init__(self, parent=None):
-        super(ImagepickerFolderMenu, self).__init__(parent)
+        super(FolderPicker, self).__init__(parent)
         self.setLayout(QtGui.QHBoxLayout())
 
         self.folderPopupButton = QtGui.QPushButton('...')
+        self.folderPopupButton.clicked.connect(self.selectFolder)
         self.folderPopupButton.setFixedWidth(50)
         self.layout().addWidget(self.folderPopupButton)
 
         self.folderSelector = QtGui.QComboBox()
         self.layout().addWidget(self.folderSelector)
 
-        self.setFolders(['foo', 'bar', 'biz'])
+    def folders(self):
+        """
+        Returns the folders that are in the selector.
+        """
 
-    def setFolders(self, folders=[]):
-        for folder in folders:
-            print('Adding folder %s to selector' % folder)
-            self.folderSelector.addItem(folder)
+        return self.folderSelector.items()
 
-        if not folders:
-            print('Clearing folders from selector')
-            self.folderSelector.clear()
+    def clearFolders(self):
+        """
+        Clears folders from the dropdown selector.
+        """
 
-    def addFolders(self, folders):
-        pass
+        self.folderSelector.clear()
 
-class Imagepicker(QtGui.QMainWindow):
+    def addFolder(self, folder):
+        """
+        Adds a folder to the dropdown selector.
+        """
+
+        self.folderSelector.addItem(folder)
+
+    def selectFolder(self):
+        """
+        Selects a new folder for the picker, emits a folderPicked signal.
+        """
+
+        dirName = QtGui.QFileDialog.getExistingDirectory(self, 
+            self.tr("Choose Directory"), 
+            path.expanduser('~'), 
+            QtGui.QFileDialog.ShowDirsOnly)
+
+        self.folderPicked.emit(dirName)
+
+class WrapperWidget(QtGui.QMainWindow):
     """
     MainWindow for the Qt application to be executed.
     """
 
     def __init__(self, parent=None):
-        super(Imagepicker, self).__init__(parent)
+        super(WrapperWidget, self).__init__(parent)
 
         self.setWindowTitle('Imagepicker')
 
         self.setCentralWidget(QtGui.QWidget(self))
         self.centralWidget().setLayout(QtGui.QVBoxLayout())
 
-        self.attachMenu()
-        self.attachPicker()
+        self.createMenus()
+        self.createWrappers()
+        self.initializeDemoData()
 
         self.resize(640, 512)
         self.show()
 
-    def attachMenu(self):
+    def createMenus(self):
+        """
+        Creates file and help menus for the QMainWindow wrapper.
+        """
+
         menubar = self.menuBar()
         fileMenu = menubar.addMenu('&File')
         helpMenu = menubar.addMenu('&Help')
 
         openAction = QtGui.QAction('&Open directory', self)
         openAction.setShortcuts(QtGui.QKeySequence.Open)
-        openAction.setStatusTip('Exit application')
+        openAction.setStatusTip('Open directory for images')
 
         exitAction = QtGui.QAction('&Exit', self)
         exitAction.setShortcuts(QtGui.QKeySequence.Close)
@@ -116,17 +183,29 @@ class Imagepicker(QtGui.QMainWindow):
         fileMenu.addAction(exitAction)
         helpMenu.addAction(helpAction)
 
-    def attachPicker(self):
-        menu = ImagepickerFolderMenu()
-        menuContainer = QtGui.QHBoxLayout()
-        menuContainer.addWidget(menu)
+    def createWrappers(self):
+        """
+        Creates layout wrappers for the folder and file pickers.
+        """
 
-        picker = ImagepickerSelector()
+        self.menu = FolderPicker()
+        self.picker = ImagePicker()
+        self.menu.folderPicked.connect(self.picker.setBitmapFolder)
+        self.menu.folderSelector.activated[str].connect(self.picker.setBitmapFolder)
+
+        menuContainer = QtGui.QHBoxLayout()
+        menuContainer.addWidget(self.menu)
         pickerContainer = QtGui.QHBoxLayout()
-        pickerContainer.addWidget(picker)
+        pickerContainer.addWidget(self.picker)
 
         self.centralWidget().layout().addLayout(menuContainer)
         self.centralWidget().layout().addLayout(pickerContainer)
+
+    def initializeDemoData(self):
+        downloads = path.join(path.expanduser('~'), 'Downloads')
+
+        if path.exists(downloads):
+            self.menu.addFolder(downloads)
 
 def main(argv=sys.argv):
     """
@@ -135,9 +214,8 @@ def main(argv=sys.argv):
     """
 
     _app = QtGui.QApplication(argv)
-    _win = Imagepicker()
-    sys.exit(_app.exec_())
-
+    _win = WrapperWidget()
+    return _app.exec_()
 
 if __name__ == '__main__':
     main()
