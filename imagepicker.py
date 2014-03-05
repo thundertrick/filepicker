@@ -20,8 +20,9 @@ Utility is also runnable as standalone for testing and demonstration purposes:
 
 # pylint: disable=C0103,R0904,W0102
 
+import re
 import sys
-from os import path
+import os
 from PySide import QtGui, QtCore
 
 def nameFilters():
@@ -30,6 +31,20 @@ def nameFilters():
     """
 
     return ['*.bmp', '*.jpg', '*.jpeg', '*.png']
+
+def nameExp():
+    """
+    Returns a compiled regexp matcher object for bitmap names.
+    """
+
+    return re.compile('^.*\.bmp$|^.*\.jpg$|^.*\.jpeg$|^.*\.png$', re.IGNORECASE)
+
+def scaledBitmap(imgPath, size=100):
+    """
+    Takes a fully qualified image path, returns QImage scaled to size.
+    """
+
+    return QtGui.QPixmap(imgPath).scaled(QtCore.QSize(100, 100))
 
 class ImagePicker(QtGui.QWidget):
     """
@@ -42,9 +57,8 @@ class ImagePicker(QtGui.QWidget):
     def __init__(self, parent=None):
         super(ImagePicker, self).__init__(parent)
 
-        self.listModel = QtGui.QFileSystemModel()
-        self.listModel.setNameFilters(nameFilters())
-    
+        self.listModel = QtGui.QStandardItemModel()
+
         self.listView = QtGui.QListView()
         self.listView.setUniformItemSizes(True)
         self.listView.setViewMode(QtGui.QListView.ViewMode.IconMode)
@@ -63,25 +77,33 @@ class ImagePicker(QtGui.QWidget):
         Sets view path to given folder.
         """
 
-        self.listModel.setRootPath(folder)
-        self.listView.setRootIndex(self.listModel.index(folder))
+        self.rootPath = folder
+        self.listModel.clear()
+        matchImg = nameExp().match
+
+        for fileName in os.listdir(folder):
+            if matchImg(fileName):
+                abspath = os.path.join(folder, fileName)
+                icon = QtGui.QIcon(scaledBitmap(abspath))
+                item = QtGui.QStandardItem(icon, fileName)
+                self.listModel.appendRow(item)
 
     @QtCore.Slot(QtCore.QModelIndex)
     def bitmapSelected(self, modelIndex):
         """
-        Intermittently transforms folder name signal emits from 
+        Intermittently transforms folder name signal emits from
         QFileSystemModel QModelIndex emits to unicode strings emits.
 
         Returned file name is a fully qualified file name for the platform.
         """
 
-        fullName = path.abspath(path.join(
-                self.listModel.rootPath(), 
-                self.listModel.fileName(modelIndex)))
+        fullName = os.path.abspath(os.path.join(self.rootPath,
+            self.listModel.itemFromIndex(modelIndex).text()))
 
         # This could be fairly slow
         for f in nameFilters():
             if fullName.lower().endswith(f.lower().strip('*')):
+                print('Selected %s' % fullName)
                 self.imagePicked.emit(fullName)
 
 class FolderPicker(QtGui.QWidget):
@@ -130,9 +152,9 @@ class FolderPicker(QtGui.QWidget):
         Selects a new folder for the picker, emits a folderPicked signal.
         """
 
-        dirName = QtGui.QFileDialog.getExistingDirectory(self, 
-            self.tr("Choose Directory"), 
-            path.expanduser('~'), 
+        dirName = QtGui.QFileDialog.getExistingDirectory(self,
+            self.tr("Choose Directory"),
+            os.path.expanduser('~'),
             QtGui.QFileDialog.ShowDirsOnly)
 
         self.folderPicked.emit(dirName)
@@ -202,9 +224,9 @@ class WrapperWidget(QtGui.QMainWindow):
         self.centralWidget().layout().addLayout(pickerContainer)
 
     def initializeDemoData(self):
-        downloads = path.join(path.expanduser('~'), 'Downloads')
+        downloads = os.path.join(os.path.expanduser('~'), 'Downloads')
 
-        if path.exists(downloads):
+        if os.path.exists(downloads):
             self.menu.addFolder(downloads)
 
 def main(argv=sys.argv):
