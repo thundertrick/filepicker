@@ -44,7 +44,7 @@ def scaledBitmap(imgPath, size=100):
     Takes a fully qualified image path, returns QImage scaled to size.
     """
 
-    return QtGui.QPixmap(imgPath).scaled(QtCore.QSize(100, 100))
+    return QtGui.QPixmap(imgPath).scaled(QtCore.QSize(size, size))
 
 class ImagePicker(QtGui.QWidget):
     """
@@ -64,6 +64,8 @@ class ImagePicker(QtGui.QWidget):
         self.listView.setViewMode(QtGui.QListView.ViewMode.IconMode)
         self.listView.setResizeMode(QtGui.QListView.ResizeMode.Adjust)
         self.listView.setModel(self.listModel)
+        self.listView.setEditTriggers(
+                QtGui.QAbstractItemView.EditTrigger.NoEditTriggers)
 
         # Transforming slot-signal combo for emitting file names as strings
         self.listView.activated.connect(self.bitmapSelected)
@@ -76,6 +78,9 @@ class ImagePicker(QtGui.QWidget):
         """
         Sets view path to given folder.
         """
+
+        if not os.path.isdir(folder):
+            return
 
         self.rootPath = folder
         self.listModel.clear()
@@ -193,7 +198,6 @@ class WrapperWidget(QtGui.QMainWindow):
 
         self.createMenus()
         self.createWrappers()
-        self.initializeDemoData()
 
         self.resize(640, 512)
         self.show()
@@ -241,12 +245,6 @@ class WrapperWidget(QtGui.QMainWindow):
 
         self.centralWidget().layout().addLayout(menuContainer)
         self.centralWidget().layout().addLayout(pickerContainer)
-
-    def initializeDemoData(self):
-        downloads = os.path.join(os.path.expanduser('~'), 'Downloads')
-
-        if os.path.exists(downloads):
-            self.menu.addFolder(downloads)
 
 def main(argv=sys.argv):
     """
