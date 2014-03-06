@@ -106,6 +106,25 @@ class ImagePicker(QtGui.QWidget):
                 print('Selected %s' % fullName)
                 self.imagePicked.emit(fullName)
 
+    def event(self, ev):
+        """
+        Catches tooltip type events. Propagates events forward.
+        """
+
+        if ev.type() == QtCore.QEvent.ToolTip:
+            index = self.listView.indexAt(ev.pos())
+
+            if index.isValid():
+                item = self.listModel.itemFromIndex(index)
+                path = os.path.join(self.rootPath, item.text())
+                text = '%s<br><img width="240" src="%s">' % (path, path)
+                QtGui.QToolTip.showText(ev.globalPos(), text)
+            else:
+                QtGui.QToolTip.hideText()
+
+        return QtGui.QWidget().event(ev)
+
+
 class FolderPicker(QtGui.QWidget):
     """
     A selector for picking folder to use for images.
