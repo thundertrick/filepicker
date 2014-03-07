@@ -75,7 +75,7 @@ class FilePicker(QtGui.QWidget):
                 QtGui.QAbstractItemView.EditTrigger.NoEditTriggers)
 
         # Transforming slot-signal combo for emitting file names as strings
-        self.listView.activated.connect(self.bitmapSelected)
+        self.listView.activated.connect(self.fileSelected)
 
         self.setLayout(QtGui.QHBoxLayout())
         self.layout().addWidget(self.listView)
@@ -100,12 +100,11 @@ class FilePicker(QtGui.QWidget):
                 self.listModel.appendRow(item)
 
     @QtCore.Slot(QtCore.QModelIndex)
-    def bitmapSelected(self, modelIndex):
+    def fileSelected(self, modelIndex):
         """
-        Intermittently transforms folder name signal emits from
-        QFileSystemModel QModelIndex emits to unicode strings emits.
+        Transforms QModelIndex signals to unicode string signals.
 
-        Returned file name is a fully qualified file name for the platform.
+        Emits filePicked with absolute file path after receiving fileSelected.
         """
 
         fullName = os.path.abspath(os.path.join(self.rootPath,
