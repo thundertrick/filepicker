@@ -8,54 +8,61 @@
 # as published by the Free Software Foundation
 
 """
-Imagepicker widget utility written with Python 2 and PySide Qt4 bindings.
+Filepicker widget utility written with Python 2 and PySide Qt4 bindings.
 
 The purpose of this utility is to offer an easy-to-use widget component
-to use with programs to select images in Pythonic GUI context.
+to use with programs to select files in Pythonic GUI context.
 
-Utility is also runnable as standalone for testing and demonstration purposes:
+Especially this concerns those image files which would be nice to 
+preview & pick in a humanly fashion instead of using big previewers.
 
-    $ python imagepicker.py
+Utility is runnable as standalone for testing and demonstration purposes:
+
+    $ python filepicker.py
 """
 
-# pylint: disable=C0103,R0904,W0102
+# pylint: disable=C0103,R0904,W0102,W0201
 
 import re
 import sys
 import os
 from PySide import QtGui, QtCore
 
-def nameFilters():
+def thumbnail(filePath, size=100):
     """
-    Returns a list of valid file names for the picker.
+    Takes a fully qualified file path, returns a QIcon for it.
+
+    Returns a thumbnail for an image file.
+    Returns a plain icon if the file was not a bitmap.
     """
 
-    return ['*.bmp', '*.jpg', '*.jpeg', '*.png']
+    bitmap = QtGui.QPixmap(filePath)
 
-def nameExp():
-    """
-    Returns a compiled regexp matcher object for bitmap names.
-    """
+    if not bitmap.isNull():
+        return QtGui.QIcon(bitmap.scaled(QtCore.QSize(size, size)))
 
-    return re.compile('^.*\.bmp$|^.*\.jpg$|^.*\.jpeg$|^.*\.png$', re.IGNORECASE)
+    return QtGui.QIcon(filePath)
 
-def scaledBitmap(imgPath, size=100):
+def fileExp(matchedSuffixes=['bmp', 'jpg', 'jpeg', 'png']):
     """
-    Takes a fully qualified image path, returns QImage scaled to size.
+    Returns a compiled regexp matcher object for given list of suffixes.
     """
 
-    return QtGui.QPixmap(imgPath).scaled(QtCore.QSize(size, size))
+    # Create a regular expression string to match all the suffixes
+    matchedString = r'|'.join([r'^.*\.' + s + '$' for s in matchedSuffixes])
 
-class ImagePicker(QtGui.QWidget):
+    return re.compile(matchedString, re.IGNORECASE)
+
+class FilePicker(QtGui.QWidget):
     """
-    Widget for picking image files from a directory.
+    Widget for picking (image) files from a directory.
     """
 
-    # Emits the fully qualified path to the picked image
-    imagePicked = QtCore.Signal(str)
+    # Emits the fully qualified path to the picked file
+    filePicked = QtCore.Signal(str)
 
     def __init__(self, parent=None):
-        super(ImagePicker, self).__init__(parent)
+        super(FilePicker, self).__init__(parent)
 
         self.listModel = QtGui.QStandardItemModel()
 
@@ -74,9 +81,9 @@ class ImagePicker(QtGui.QWidget):
         self.layout().addWidget(self.listView)
 
     @QtCore.Slot(str)
-    def setBitmapFolder(self, folder):
+    def setRootPath(self, folder):
         """
-        Sets view path to given folder.
+        Sets the root path for bitmaps to given folder.
         """
 
         if not os.path.isdir(folder):
@@ -84,12 +91,11 @@ class ImagePicker(QtGui.QWidget):
 
         self.rootPath = folder
         self.listModel.clear()
-        matchImg = nameExp().match
 
         for fileName in os.listdir(folder):
-            if matchImg(fileName):
-                abspath = os.path.join(folder, fileName)
-                icon = QtGui.QIcon(scaledBitmap(abspath))
+            if fileExp().match(fileName):
+                absPath = os.path.join(self.rootPath, fileName)
+                icon = thumbnail(absPath)
                 item = QtGui.QStandardItem(icon, fileName)
                 self.listModel.appendRow(item)
 
@@ -105,34 +111,32 @@ class ImagePicker(QtGui.QWidget):
         fullName = os.path.abspath(os.path.join(self.rootPath,
             self.listModel.itemFromIndex(modelIndex).text()))
 
-        # This could be fairly slow
-        for f in nameFilters():
-            if fullName.lower().endswith(f.lower().strip('*')):
-                print('Selected %s' % fullName)
-                self.imagePicked.emit(fullName)
+        if fileExp().match(fullName):
+            print('Selected %s' % fullName)
+            self.filePicked.emit(fullName)
 
-    def event(self, ev):
+    def event(self, event):
         """
         Catches tooltip type events. Propagates events forward.
         """
 
-        if ev.type() == QtCore.QEvent.ToolTip:
-            index = self.listView.indexAt(ev.pos())
+        if event.type() == QtCore.QEvent.ToolTip:
+            index = self.listView.indexAt(event.pos())
 
             if index.isValid():
                 item = self.listModel.itemFromIndex(index)
                 path = os.path.join(self.rootPath, item.text())
-                text = '%s<br><img width="240" src="%s">' % (path, path)
-                QtGui.QToolTip.showText(ev.globalPos(), text)
+                text = '%s <br /> <img width="300" src="%s" />' % (path, path)
+                QtGui.QToolTip.showText(event.globalPos(), text)
             else:
                 QtGui.QToolTip.hideText()
 
-        return QtGui.QWidget().event(ev)
+        return QtGui.QWidget().event(event)
 
 
 class FolderPicker(QtGui.QWidget):
     """
-    A selector for picking folder to use for images.
+    A selector for picking folder to use for picking files.
     """
 
     # Emits fully qualified path to the picked folder
@@ -142,13 +146,17 @@ class FolderPicker(QtGui.QWidget):
         super(FolderPicker, self).__init__(parent)
         self.setLayout(QtGui.QHBoxLayout())
 
-        self.folderPopupButton = QtGui.QPushButton('...')
+        self.folderPopupButton = QtGui.QPushButton(
+            QtGui.QFileIconProvider().icon(QtGui.QFileIconProvider.Folder),
+            'Select file folder')
+        self.folderPopupButton.setMaximumSize(150,
+            self.folderPopupButton.height())
         self.folderPopupButton.clicked.connect(self.selectFolder)
-        self.folderPopupButton.setFixedWidth(50)
         self.layout().addWidget(self.folderPopupButton)
 
         self.folderSelector = QtGui.QComboBox()
         self.layout().addWidget(self.folderSelector)
+        self.folderSelector.setDisabled(True)
 
     def folders(self):
         """
@@ -162,6 +170,7 @@ class FolderPicker(QtGui.QWidget):
         Clears folders from the dropdown selector.
         """
 
+        self.folderSelector.setDisabled(True)
         self.folderSelector.clear()
 
     def addFolder(self, folder):
@@ -169,7 +178,9 @@ class FolderPicker(QtGui.QWidget):
         Adds a folder to the dropdown selector.
         """
 
-        self.folderSelector.addItem(folder)
+        if os.path.isdir(folder):
+            self.folderSelector.addItem(folder)
+            self.folderSelector.setDisabled(False)
 
     def selectFolder(self):
         """
@@ -191,7 +202,7 @@ class WrapperWidget(QtGui.QMainWindow):
     def __init__(self, parent=None):
         super(WrapperWidget, self).__init__(parent)
 
-        self.setWindowTitle('Imagepicker')
+        self.setWindowTitle('Filepicker')
 
         self.setCentralWidget(QtGui.QWidget(self))
         self.centralWidget().setLayout(QtGui.QVBoxLayout())
@@ -211,16 +222,16 @@ class WrapperWidget(QtGui.QMainWindow):
         fileMenu = menubar.addMenu('&File')
         helpMenu = menubar.addMenu('&Help')
 
-        openAction = QtGui.QAction('&Open directory', self)
+        openAction = QtGui.QAction('&Open directory (unimplemented)', self)
         openAction.setShortcuts(QtGui.QKeySequence.Open)
-        openAction.setStatusTip('Open directory for images')
+        openAction.setStatusTip('Choose directory for files')
 
         exitAction = QtGui.QAction('&Exit', self)
         exitAction.setShortcuts(QtGui.QKeySequence.Close)
         exitAction.setStatusTip('Exit application')
         exitAction.triggered.connect(self.close)
 
-        helpAction = QtGui.QAction('&Help for Imagepicker', self)
+        helpAction = QtGui.QAction('View &help (unimplemented)', self)
         helpAction.setShortcut(QtGui.QKeySequence.HelpContents)
         helpAction.setStatusTip('Help and documentation')
 
@@ -234,9 +245,9 @@ class WrapperWidget(QtGui.QMainWindow):
         """
 
         self.menu = FolderPicker()
-        self.picker = ImagePicker()
-        self.menu.folderPicked.connect(self.picker.setBitmapFolder)
-        self.menu.folderSelector.activated[str].connect(self.picker.setBitmapFolder)
+        self.picker = FilePicker()
+        self.menu.folderPicked.connect(self.picker.setRootPath)
+        self.menu.folderSelector.activated[str].connect(self.picker.setRootPath)
 
         menuContainer = QtGui.QHBoxLayout()
         menuContainer.addWidget(self.menu)
@@ -253,7 +264,7 @@ def main(argv=sys.argv):
     """
 
     _app = QtGui.QApplication(argv)
-    _win = WrapperWidget()
+    _win = WrapperWidget()  # pylint: disable=W0612
     return _app.exec_()
 
 if __name__ == '__main__':
