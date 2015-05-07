@@ -140,6 +140,7 @@ class FolderPicker(QtGui.QWidget):
 
     # Emits fully qualified path to the picked folder
     folderPicked = QtCore.Signal(str)
+    currentFolder = '~'
 
     def __init__(self, parent=None):
         super(FolderPicker, self).__init__(parent)
@@ -155,18 +156,21 @@ class FolderPicker(QtGui.QWidget):
 
         self.folderSelector = QtGui.QComboBox()
         self.layout().addWidget(self.folderSelector)
+        self.folderSelector.setMaxVisibleItems(10)
+        self.folderSelector.setInsertPolicy(QtGui.QComboBox.InsertAtTop)
         self.folderSelector.setDisabled(True)
 
         # TODO: add more buttons for file operations
-        # self.upperFolderButton = QtGui.QPushButton('Upper')
-        # self.layout().addWidget(self.upperFolderButton)
-
+        # 
+        self.upperFolderButton = QtGui.QPushButton('Upper')
+        self.upperFolderButton.clicked.connect(self.upperFolder)
+        self.layout().addWidget(self.upperFolderButton)
+        self.upperFolderButton.setDisabled(True)
 
     def folders(self):
         """
         Returns the folders that are in the selector.
         """
-
         return self.folderSelector.items()
 
     def clearFolders(self):
@@ -175,6 +179,7 @@ class FolderPicker(QtGui.QWidget):
         """
 
         self.folderSelector.setDisabled(True)
+        self.upperFolderButton.setDisabled(True)
         self.folderSelector.clear()
 
     def addFolder(self, folder):
@@ -183,8 +188,11 @@ class FolderPicker(QtGui.QWidget):
         """
 
         if os.path.isdir(folder):
-            self.folderSelector.addItem(folder)
+            self.folderSelector.insertItem(0, folder)
+            self.folderSelector.setCurrentIndex(0)
             self.folderSelector.setDisabled(False)
+            self.upperFolderButton.setDisabled(False)
+            self.currentFolder = folder
 
     def selectFolder(self):
         """
@@ -198,6 +206,12 @@ class FolderPicker(QtGui.QWidget):
 
         self.addFolder(dirName)
         self.folderPicked.emit(dirName)
+
+    def upperFolder(self):
+        # TODO: 
+        upperfolder = os.path.dirname(self.currentFolder)
+        self.addFolder(upperfolder)
+        self.folderPicked.emit(upperfolder)
 
 class WrapperWidget(QtGui.QMainWindow):
     """
