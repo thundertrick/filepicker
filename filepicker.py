@@ -196,8 +196,7 @@ class FolderPicker(QtGui.QWidget):
             os.path.expanduser('~'),
             QtGui.QFileDialog.ShowDirsOnly)
 
-        self.folderSelector.setDisabled(False)
-        self.folderSelector.addItem(dirName)
+        self.addFolder(dirName)
         self.folderPicked.emit(dirName)
 
 class WrapperWidget(QtGui.QMainWindow):
