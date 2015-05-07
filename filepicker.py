@@ -157,6 +157,11 @@ class FolderPicker(QtGui.QWidget):
         self.layout().addWidget(self.folderSelector)
         self.folderSelector.setDisabled(True)
 
+        # TODO: add more buttons for file operations
+        # self.upperFolderButton = QtGui.QPushButton('Upper')
+        # self.layout().addWidget(self.upperFolderButton)
+
+
     def folders(self):
         """
         Returns the folders that are in the selector.
@@ -191,6 +196,8 @@ class FolderPicker(QtGui.QWidget):
             os.path.expanduser('~'),
             QtGui.QFileDialog.ShowDirsOnly)
 
+        self.folderSelector.setDisabled(False)
+        self.folderSelector.addItem(dirName)
         self.folderPicked.emit(dirName)
 
 class WrapperWidget(QtGui.QMainWindow):
